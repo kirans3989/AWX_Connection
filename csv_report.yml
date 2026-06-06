@@ -9,23 +9,34 @@
       register: ping_result
       ignore_errors: yes
 
-    - name: Write SUCCESS row
-      delegate_to: localhost
+    - name: Set result fact
+      set_fact:
+        csv_line: >-
+          {{ inventory_hostname }},
+          {{ 'SUCCESS' if (ping_result is defined and ping_result is not failed) else 'FAILED' }},
+          {{ 'N/A' if (ping_result is defined and ping_result is not failed) else 'SSH or ping failed' }}
+
+- name: Generate CSV Report
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Write CSV header
       lineinfile:
         path: /tmp/connectivity_report.csv
         create: yes
-        line: "{{ inventory_hostname }},SUCCESS,N/A"
-      when: ping_result is not failed and ping_result is not skipped
+        line: "Hostname,Status,Notes"
+        insertbefore: BOF
 
-    - name: Write FAILED row
-      delegate_to: localhost
+    - name: Write all rows
       lineinfile:
         path: /tmp/connectivity_report.csv
-        create: yes
-        line: "{{ inventory_hostname }},FAILED,SSH or ping failed"
-      when: ping_result is failed or ping_result is skipped
+        line: "{{ hostvars[item]['csv_line'] }}"
+      loop: "{{ groups['all'] }}"
 
-    - name: Show CSV record
-      delegate_to: localhost
+    - name: Print full CSV report
+      command: cat /tmp/connectivity_report.csv
+      register: csv_output
+
+    - name: Show CSV in AWX output
       debug:
-        msg: "Written row for {{ inventory_hostname }}"
+        msg: "{{ csv_output.stdout_lines }}"
