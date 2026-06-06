@@ -1,0 +1,22 @@
+---
+
+- name: Create Connectivity Report
+  hosts: all
+  gather_facts: no
+
+  tasks:
+
+  - name: Ping host
+    ping:
+    register: ping_result
+
+  - name: Create CSV file
+    delegate_to: localhost
+    lineinfile:
+    path: /tmp/connectivity_report.csv
+    create: yes
+    line: "{{ inventory_hostname }},SUCCESS,N/A"
+
+  - name: Show CSV record
+    debug:
+    msg: "{{ inventory_hostname }},SUCCESS,N/A"
