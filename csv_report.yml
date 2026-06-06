@@ -27,7 +27,7 @@
   vars:
     artifactory_url: "http://98.84.183.28:8082"
     artifactory_repo: "connectivity-reports"
-    artifactory_token: "{{ jfrog_token }}"
+    artifactory_token: "{{ artifactory_token }}"
 
   tasks:
     - name: Build CSV content
