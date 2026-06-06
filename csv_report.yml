@@ -1,3 +1,26 @@
+---
+- name: Create Connectivity Report
+  hosts: all
+  gather_facts: no
+  ignore_unreachable: yes
+  tasks:
+    - name: Ping host
+      ping:
+      register: ping_result
+      ignore_errors: yes
+
+    - name: Set SUCCESS fact
+      set_fact:
+        csv_line: "{{ inventory_hostname }},SUCCESS,N/A"
+      when:
+        - ping_result is defined
+        - ping_result is not failed
+
+    - name: Set UNREACHABLE fact
+      set_fact:
+        csv_line: "{{ inventory_hostname }},UNREACHABLE,SSH connection failed"
+      when: ping_result is not defined
+
 - name: Generate CSV Report
   hosts: localhost
   gather_facts: no
