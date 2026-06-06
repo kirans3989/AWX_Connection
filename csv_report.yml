@@ -8,20 +8,27 @@
       ping:
       register: ping_result
       ignore_errors: yes
+
     - name: Set SUCCESS fact
       set_fact:
         csv_line: "{{ inventory_hostname }},SUCCESS,N/A"
       when:
         - ping_result is defined
         - ping_result is not failed
+
     - name: Set UNREACHABLE fact
       set_fact:
         csv_line: "{{ inventory_hostname }},UNREACHABLE,SSH connection failed"
       when: ping_result is not defined
 
-- name: Generate CSV Report
+- name: Generate and Upload CSV Report
   hosts: localhost
-  gather_facts: no
+  gather_facts: yes
+  vars:
+    artifactory_url: "http://98.84.183.28:8082"
+    artifactory_repo: "connectivity-reports"
+    artifactory_token: "{{ artifactory_token }}"
+
   tasks:
     - name: Build CSV content
       set_fact:
@@ -31,11 +38,24 @@
           {{ hostvars[host].get('csv_line', host + ',UNREACHABLE,No data collected') }}
           {% endfor %}
 
-    - name: Save CSV to 10.0.1.8
-      delegate_to: 10.0.1.8
+    - name: Save CSV locally
       copy:
-        dest: /home/ubuntu/connectivity_report.csv
+        dest: /tmp/connectivity_report.csv
         content: "{{ csv_content }}"
+
+    - name: Upload CSV to JFrog Artifactory
+      uri:
+        url: "{{ artifactory_url }}/artifactory/{{ artifactory_repo }}/connectivity_report_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}.csv"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ artifactory_token }}"
+        src: /tmp/connectivity_report.csv
+        status_code: 201
+      register: upload_result
+
+    - name: Show upload status
+      debug:
+        msg: "CSV uploaded successfully to Artifactory: {{ artifactory_url }}/artifactory/{{ artifactory_repo }}/"
 
     - name: Show CSV in AWX output
       debug:
