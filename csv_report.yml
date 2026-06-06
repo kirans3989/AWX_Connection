@@ -1,43 +1,15 @@
----
-- name: Create Connectivity Report
-  hosts: all
-  gather_facts: no
-  ignore_unreachable: yes
-  tasks:
-    - name: Ping host
-      ping:
-      register: ping_result
-      ignore_errors: yes
-
-    - name: Set SUCCESS fact
-      set_fact:
-        csv_line: "{{ inventory_hostname }},SUCCESS,N/A"
-      when:
-        - ping_result is defined
-        - ping_result is not failed
-
-    - name: Set FAILED fact (host unreachable)
-      set_fact:
-        csv_line: "{{ inventory_hostname }},UNREACHABLE,SSH connection failed"
-      when: ping_result is not defined
-
 - name: Generate CSV Report
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Write CSV file
-      copy:
-        dest: /home/ubuntu/connectivity_report.csv
-        content: |
+    - name: Build CSV content
+      set_fact:
+        csv_content: |
           Hostname,Status,Notes
           {% for host in groups['all'] %}
           {{ hostvars[host].get('csv_line', host + ',UNREACHABLE,No data collected') }}
           {% endfor %}
 
-    - name: Display CSV in AWX output
-      command: cat /home/ubuntu/connectivity_report.csv
-      register: csv_out
-
-    - name: Show CSV
+    - name: Show CSV in AWX output
       debug:
-        msg: "{{ csv_out.stdout_lines }}"
+        msg: "{{ csv_content.split('\n') }}"
