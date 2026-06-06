@@ -8,14 +8,12 @@
       ping:
       register: ping_result
       ignore_errors: yes
-
     - name: Set SUCCESS fact
       set_fact:
         csv_line: "{{ inventory_hostname }},SUCCESS,N/A"
       when:
         - ping_result is defined
         - ping_result is not failed
-
     - name: Set UNREACHABLE fact
       set_fact:
         csv_line: "{{ inventory_hostname }},UNREACHABLE,SSH connection failed"
@@ -32,6 +30,12 @@
           {% for host in groups['all'] %}
           {{ hostvars[host].get('csv_line', host + ',UNREACHABLE,No data collected') }}
           {% endfor %}
+
+    - name: Save CSV to 10.0.1.8
+      delegate_to: 10.0.1.8
+      copy:
+        dest: /home/ubuntu/connectivity_report.csv
+        content: "{{ csv_content }}"
 
     - name: Show CSV in AWX output
       debug:
