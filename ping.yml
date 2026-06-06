@@ -1,16 +1,28 @@
 ---
-- name: Ping Connectivity Test
+- name: Connectivity Check
   hosts: all
   gather_facts: no
 
   tasks:
-    - name: Ping target host
+
+    - name: Test connectivity
       ping:
+      register: ping_result
+      ignore_unreachable: yes
+      ignore_errors: yes
 
-    - name: Get hostname
-      command: hostname
-      register: hostname_out
+    - name: Create CSV line for success
+      delegate_to: localhost
+      lineinfile:
+        path: /tmp/connectivity_report.csv
+        create: yes
+        line: "{{ inventory_hostname }},SUCCESS,N/A"
+      when: ping_result is succeeded
 
-    - name: Show hostname
-      debug:
-        var: hostname_out.stdout
+    - name: Create CSV line for failure
+      delegate_to: localhost
+      lineinfile:
+        path: /tmp/connectivity_report.csv
+        create: yes
+        line: "{{ inventory_hostname }},FAILED,{{ ping_result.msg | default('Unknown Error') }}"
+      when: ping_result is failed
