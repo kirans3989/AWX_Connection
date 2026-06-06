@@ -1,18 +1,18 @@
 ---
 
-* name: AWX Connectivity Test
+. name: AWX Connectivity Test
   hosts: all
   gather_facts: no
 
   tasks:
 
-  * name: Ping target host
+  . name: Ping target host
     ping:
 
-  * name: Get hostname
+  . name: Get hostname
     command: hostname
-    register: host_name
+    register: hostname_out
 
-  * name: Display hostname
+  . name: Show hostname
     debug:
-    var: host_name.stdout
+    var: hostname_out.stdout
