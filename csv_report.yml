@@ -26,17 +26,13 @@
           {{ host }},{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}
           {% endfor %}
 
-    - name: Verify token injection
-      debug:
-        msg: "Token Length={{ lookup('env','JFROG_ACCESS_TOKEN') | length }}"
-
     - name: Upload CSV to Artifactory
       uri:
         url: "{{ artifactory_url }}/artifactory/{{ artifactory_repo }}/connectivity_report_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}.csv"
         method: PUT
-        headers:
-          Authorization: "Bearer {{ lookup('env','JFROG_ACCESS_TOKEN') }}"
-          Content-Type: "text/csv"
+        user: "{{ lookup('env','JFROG_USER') }}"
+        password: "{{ lookup('env','JFROG_PASSWORD') }}"
+        force_basic_auth: yes
         src: "{{ report_file }}"
         status_code:
           - 200
