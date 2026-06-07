@@ -1,25 +1,26 @@
 ---
 - name: Connectivity Test
-  hosts: linux
+  hosts: all
   gather_facts: no
   ignore_unreachable: yes
 
   tasks:
-    - name: Run ping test
-      ping:
+    - name: Ping target hosts
+      ansible.builtin.ping:
       register: ping_result
+      ignore_errors: yes
 
-    - name: Store result
+    - name: Store connectivity status
       set_fact:
         connectivity_status: "{{ 'Success' if ping_result.ping is defined else 'Failed' }}"
 
-- name: Generate CSV and Upload
+- name: Generate CSV and Upload to Artifactory
   hosts: localhost
   gather_facts: yes
 
   vars:
     report_file: "/home/ubuntu/connectivity_report.csv"
-    artifactory_url: "http://98.84.183.28:8082"
+    artifactory_url: "http://54.235.15.30:8082"
     artifactory_repo: "connectivity-reports"
 
   tasks:
@@ -27,23 +28,24 @@
     - name: Create CSV header
       copy:
         dest: "{{ report_file }}"
-        content: |
-          Hostname,Status
+        content: "Hostname,Status\n"
 
-    - name: Append server results
+    - name: Append connectivity results
       lineinfile:
         path: "{{ report_file }}"
         line: "{{ item }},{{ hostvars[item].connectivity_status | default('Unreachable') }}"
         insertafter: EOF
-      loop: "{{ groups['linux'] }}"
+      loop: "{{ groups['all'] }}"
+      when: item != 'localhost'
 
-    - name: Verify CSV exists
+    - name: Verify CSV file exists
       stat:
         path: "{{ report_file }}"
       register: csv_stat
 
-    - debug:
-        var: csv_stat.stat.exists
+    - name: Display CSV status
+      debug:
+        var: csv_stat.stat
 
     - name: Upload CSV to Artifactory
       uri:
@@ -58,5 +60,8 @@
           - 201
       register: upload_result
 
-    - debug:
-        var: upload_result.status
+    - name: Display upload result
+      debug:
+        msg:
+          - "Upload Status: {{ upload_result.status }}"
+          - "CSV File: {{ report_file }}"
