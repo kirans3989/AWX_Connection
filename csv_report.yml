@@ -5,14 +5,10 @@
   ignore_unreachable: yes
 
   tasks:
-    - name: Ping target hosts
+    - name: Run connectivity test
       ansible.builtin.ping:
       register: ping_result
       ignore_errors: yes
-
-    - name: Store connectivity status
-      set_fact:
-        connectivity_status: "{{ 'Success' if ping_result.ping is defined else 'Failed' }}"
 
 - name: Generate CSV and Upload to Artifactory
   hosts: localhost
@@ -25,27 +21,35 @@
 
   tasks:
 
-    - name: Create CSV header
+    - name: Generate CSV report
       copy:
         dest: "{{ report_file }}"
-        content: "Hostname,Status\n"
+        content: |
+          Hostname,Status
+          {% for host in groups['all'] %}
+          {{ host }},{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}
+          {% endfor %}
 
-    - name: Append connectivity results
-      lineinfile:
-        path: "{{ report_file }}"
-        line: "{{ item }},{{ hostvars[item].connectivity_status | default('Unreachable') }}"
-        insertafter: EOF
-      loop: "{{ groups['all'] }}"
-      when: item != 'localhost'
-
-    - name: Verify CSV file exists
+    - name: Verify CSV exists
       stat:
         path: "{{ report_file }}"
-      register: csv_stat
+      register: csv_file
 
     - name: Display CSV status
       debug:
-        var: csv_stat.stat
+        var: csv_file.stat
+
+    - name: Display CSV content
+      command: cat {{ report_file }}
+      register: csv_content
+      changed_when: false
+
+    - debug:
+        var: csv_content.stdout_lines
+
+    - name: Verify token injection
+      debug:
+        msg: "Token Length={{ lookup('env','JFROG_ACCESS_TOKEN') | length }}"
 
     - name: Upload CSV to Artifactory
       uri:
@@ -60,8 +64,6 @@
           - 201
       register: upload_result
 
-    - name: Display upload result
+    - name: Upload result
       debug:
-        msg:
-          - "Upload Status: {{ upload_result.status }}"
-          - "CSV File: {{ report_file }}"
+        var: upload_result.status
