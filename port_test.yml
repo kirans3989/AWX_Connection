@@ -1,0 +1,101 @@
+---
+- name: Load source and destination hosts
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Add source hosts
+      add_host:
+        name: "{{ item }}"
+        groups: source_hosts
+      loop:
+        - 10.0.1.8
+        - 10.0.1.124
+        - 10.0.1.50
+        - 10.0.1.100
+
+    - name: Add destination hosts
+      add_host:
+        name: "{{ item }}"
+        groups: destination_hosts
+      loop:
+        - 10.0.1.81
+        - 10.0.1.123
+        - 10.0.1.51
+        - 10.0.1.101
+
+- name: Test port connectivity from source servers
+  hosts: source_hosts
+  gather_facts: no
+  ignore_unreachable: yes
+  vars:
+    destination_hosts:
+      - 10.0.1.81
+      - 10.0.1.123
+      - 10.0.1.51
+      - 10.0.1.101
+    ports:
+      - 8400
+      - 8403
+  tasks:
+    - name: Test port connectivity using curl telnet
+      shell: |
+        curl -sv telnet://{{ dest }}:{{ port }} --connect-timeout 5 2>&1 | grep -E "Connected|Connection refused|timed out|failed"
+      register: port_test
+      ignore_errors: yes
+      loop: "{{ destination_hosts | product(ports) | list }}"
+      loop_control:
+        loop_var: item
+      vars:
+        dest: "{{ item[0] }}"
+        port: "{{ item[1] }}"
+
+    - name: Set connectivity facts
+      set_fact:
+        port_results: "{{ port_results | default([]) + [{'source': inventory_hostname, 'destination': item.item[0], 'port': item.item[1], 'status': 'Success' if 'Connected' in item.stdout else 'Failed'}] }}"
+      loop: "{{ port_test.results }}"
+
+- name: Generate CSV and Upload to Artifactory
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    report_file: "/tmp/port_connectivity_report.csv"
+    artifactory_url: "http://54.235.15.30:8082"
+    artifactory_repo: "connectivity-reports"
+  tasks:
+    - name: Create CSV header
+      copy:
+        dest: "{{ report_file }}"
+        content: "Source,Destination,Port,Status\n"
+
+    - name: Add rows to CSV
+      lineinfile:
+        path: "{{ report_file }}"
+        line: "{{ item.source }},{{ item.destination }},{{ item.port }},{{ item.status }}"
+      loop: "{{ ansible_play_hosts | map('extract', hostvars, 'port_results') | flatten }}"
+      vars:
+        ansible_play_hosts: "{{ groups['source_hosts'] }}"
+
+    - name: Display CSV content
+      command: cat {{ report_file }}
+      register: csv_content
+      changed_when: false
+
+    - debug:
+        var: csv_content.stdout_lines
+
+    - name: Upload CSV to Artifactory
+      uri:
+        url: "{{ artifactory_url }}/artifactory/{{ artifactory_repo }}/port_connectivity_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}.csv"
+        method: PUT
+        user: "{{ lookup('env','JFROG_USER') }}"
+        password: "{{ lookup('env','JFROG_PASSWORD') }}"
+        force_basic_auth: yes
+        src: "{{ report_file }}"
+        status_code:
+          - 200
+          - 201
+      register: upload_result
+
+    - name: Show upload status
+      debug:
+        msg: "Upload status: {{ upload_result.status }}"
