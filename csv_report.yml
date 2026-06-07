@@ -37,13 +37,26 @@
     artifactory_url: "http://54.235.15.30:8082"
     artifactory_repo: "connectivity-reports"
   tasks:
-    - name: Generate CSV report
+    - name: Create CSV header
       copy:
         dest: "{{ report_file }}"
-        content: |
-          Hostname,Port,Status
-          {% for host in groups['dynamic_hosts'] %}{{ host }},22,{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}
-          {% endfor %}
+        content: "Hostname,Port,Status\n"
+
+    - name: Add each host row to CSV
+      lineinfile:
+        path: "{{ report_file }}"
+        line: "{{ host }},22,{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}"
+      loop: "{{ groups['dynamic_hosts'] }}"
+      loop_control:
+        loop_var: host
+
+    - name: Display CSV content
+      command: cat {{ report_file }}
+      register: csv_content
+      changed_when: false
+
+    - debug:
+        var: csv_content.stdout_lines
 
     - name: Upload CSV to Artifactory
       uri:
@@ -61,11 +74,3 @@
     - name: Show upload status
       debug:
         msg: "Upload status: {{ upload_result.status }}"
-
-    - name: Display CSV content
-      command: cat {{ report_file }}
-      register: csv_content
-      changed_when: false
-
-    - debug:
-        var: csv_content.stdout_lines
