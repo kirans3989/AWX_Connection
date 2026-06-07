@@ -19,6 +19,16 @@
       register: ping_result
       ignore_errors: yes
 
+    - name: Check port 22
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+        timeout: 5
+        state: started
+      register: port_result
+      ignore_errors: yes
+      delegate_to: localhost
+
 - name: Generate CSV and Upload to Artifactory
   hosts: localhost
   gather_facts: yes
@@ -30,7 +40,7 @@
     - name: Generate CSV report
       copy:
         dest: "{{ report_file }}"
-        content: "Hostname,Status\n{% for host in groups['dynamic_hosts'] %}{{ host }},{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}\n{% endfor %}"
+        content: "Hostname,Port,Status\n{% for host in groups['dynamic_hosts'] %}{{ host }},22,{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}\n{% endfor %}"
 
     - name: Upload CSV to Artifactory
       uri:
