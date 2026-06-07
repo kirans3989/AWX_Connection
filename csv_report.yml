@@ -3,7 +3,6 @@
   hosts: all
   gather_facts: no
   ignore_unreachable: yes
-
   tasks:
     - name: Run connectivity test
       ansible.builtin.ping:
@@ -13,14 +12,11 @@
 - name: Generate CSV and Upload to Artifactory
   hosts: localhost
   gather_facts: yes
-
   vars:
-    report_file: "/home/ubuntu/connectivity_report.csv"
+    report_file: "/tmp/connectivity_report.csv"
     artifactory_url: "http://54.235.15.30:8082"
     artifactory_repo: "connectivity-reports"
-
   tasks:
-
     - name: Generate CSV report
       copy:
         dest: "{{ report_file }}"
@@ -29,23 +25,6 @@
           {% for host in groups['all'] %}
           {{ host }},{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}
           {% endfor %}
-
-    - name: Verify CSV exists
-      stat:
-        path: "{{ report_file }}"
-      register: csv_file
-
-    - name: Display CSV status
-      debug:
-        var: csv_file.stat
-
-    - name: Display CSV content
-      command: cat {{ report_file }}
-      register: csv_content
-      changed_when: false
-
-    - debug:
-        var: csv_content.stdout_lines
 
     - name: Verify token injection
       debug:
@@ -64,6 +43,14 @@
           - 201
       register: upload_result
 
-    - name: Upload result
+    - name: Show upload status
       debug:
-        var: upload_result.status
+        msg: "Upload status: {{ upload_result.status }}"
+
+    - name: Display CSV content
+      command: cat {{ report_file }}
+      register: csv_content
+      changed_when: false
+
+    - debug:
+        var: csv_content.stdout_lines
