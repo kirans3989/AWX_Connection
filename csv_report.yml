@@ -1,6 +1,16 @@
 ---
+- name: Load hosts from file
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Add hosts from servers.txt
+      add_host:
+        name: "{{ item }}"
+        groups: dynamic_hosts
+      loop: "{{ lookup('file', 'servers.txt').splitlines() | select('match', '^[0-9]') | list }}"
+
 - name: Connectivity Test
-  hosts: all
+  hosts: dynamic_hosts
   gather_facts: no
   ignore_unreachable: yes
   tasks:
@@ -20,11 +30,7 @@
     - name: Generate CSV report
       copy:
         dest: "{{ report_file }}"
-        content: |
-          Hostname,Status
-          {% for host in groups['all'] %}
-          {{ host }},{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}
-          {% endfor %}
+        content: "Hostname,Status\n{% for host in groups['dynamic_hosts'] %}{{ host }},{% if hostvars[host].ping_result is defined and hostvars[host].ping_result.ping is defined %}Success{% else %}Unreachable{% endif %}\n{% endfor %}"
 
     - name: Upload CSV to Artifactory
       uri:
