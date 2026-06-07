@@ -1,25 +1,62 @@
-- name: Generate and Upload CSV Report
+---
+- name: Connectivity Test
+  hosts: linux
+  gather_facts: no
+  ignore_unreachable: yes
+
+  tasks:
+    - name: Run ping test
+      ping:
+      register: ping_result
+
+    - name: Store result
+      set_fact:
+        connectivity_status: "{{ 'Success' if ping_result.ping is defined else 'Failed' }}"
+
+- name: Generate CSV and Upload
   hosts: localhost
   gather_facts: yes
 
   vars:
+    report_file: "/home/ubuntu/connectivity_report.csv"
     artifactory_url: "http://98.84.183.28:8082"
     artifactory_repo: "connectivity-reports"
 
   tasks:
 
-    - name: Verify token injection
-      debug:
-        msg: "Token Length={{ lookup('env','JFROG_ACCESS_TOKEN') | length }}"
+    - name: Create CSV header
+      copy:
+        dest: "{{ report_file }}"
+        content: |
+          Hostname,Status
 
-    - name: Upload CSV to JFrog Artifactory
+    - name: Append server results
+      lineinfile:
+        path: "{{ report_file }}"
+        line: "{{ item }},{{ hostvars[item].connectivity_status | default('Unreachable') }}"
+        insertafter: EOF
+      loop: "{{ groups['linux'] }}"
+
+    - name: Verify CSV exists
+      stat:
+        path: "{{ report_file }}"
+      register: csv_stat
+
+    - debug:
+        var: csv_stat.stat.exists
+
+    - name: Upload CSV to Artifactory
       uri:
         url: "{{ artifactory_url }}/artifactory/{{ artifactory_repo }}/connectivity_report_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}.csv"
         method: PUT
         headers:
           Authorization: "Bearer {{ lookup('env','JFROG_ACCESS_TOKEN') }}"
-        src: /home/ubuntu/connectivity_report.csv
+          Content-Type: "text/csv"
+        src: "{{ report_file }}"
         status_code:
           - 200
           - 201
       register: upload_result
+
+    - debug:
+        var: upload_result.status
