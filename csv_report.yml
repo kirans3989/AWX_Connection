@@ -18,7 +18,7 @@
         method: PUT
         headers:
           Authorization: "Bearer {{ lookup('env','JFROG_ACCESS_TOKEN') }}"
-        src: /tmp/connectivity_report.csv
+        src: /home/ubuntu/connectivity_report.csv
         status_code:
           - 200
           - 201
